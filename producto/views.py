@@ -3,7 +3,8 @@ from django.shortcuts import render
 from comercio.permissions import requiere_permiso 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .serializers import CategoriaSerializer, SubcategoriaSerializer, MarcaSerializer, ProductoSerializer
+from drf_yasg.utils import swagger_auto_schema
+from .serializers import CategoriaSerializer, SubcategoriaSerializer, MarcaSerializer, ProductoSerializer, ImagenProductoSerializer
 from .models import CategoriaModel, SubcategoriaModel, MarcaModel, ProductoModel
 # Create your views here.
 
@@ -434,24 +435,33 @@ def obtener_marca_por_id(request, marca_id):
     
 # CRUD PRODUCTOS
 # --------------------- Crear Producto ---------------------
+@swagger_auto_schema(
+    method="post",
+    request_body=ProductoSerializer,
+    responses={201: ProductoSerializer} 
+)
 @api_view(['POST'])
 @requiere_permiso("Producto", "crear")
 def crear_producto(request):
-    serializer = ProductoSerializer(data=request.data)
+    
+    # Debes pasar 'request.data' al serializer
+    serializer = ProductoSerializer(data=request.data) 
+    
     if serializer.is_valid():
         serializer.save()
         return Response({
             "status": 1,
             "error": 0,
-            "message": "Producto creado correctamente",
+            "message": "Producto creado y fotos subidas a Cloudinary",
             "values": {"producto": serializer.data}
-        })
+        }, status=201)
+        
     return Response({
         "status": 0,
         "error": 1,
         "message": "Error al crear Producto",
         "values": serializer.errors
-    })
+    }, status=400)
 
 # --------------------- Actualizar Producto ---------------------
 @api_view(['PATCH'])

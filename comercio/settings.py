@@ -38,6 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'cloudinary',
+    'cloudinary_storage',
     'corsheaders',
     'usuario',
     'producto',
@@ -45,6 +47,17 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'drf_yasg'
 ]
+
+# Configuración de Cloudinary (Obligatorio)
+import cloudinary
+import os
+
+# Asegúrate de que estas variables de entorno existan en tu servidor/entorno local
+cloudinary.config( 
+  cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
+  api_key = os.getenv('CLOUDINARY_API_KEY'),
+  api_secret = os.getenv('CLOUDINARY_API_SECRET')
+)
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

@@ -74,3 +74,30 @@ class CambioPrecioModel(models.Model):
     #     ('alquiler', 'Alquiler'),
     #     ('anticretico', 'Anticrético'),
     # ], blank=True, null=True)
+    
+# TABLA DE IMAGENES DE PRODUCTO
+class ImagenProductoModel(models.Model):
+    producto = models.ForeignKey(
+        ProductoModel, 
+        on_delete=models.CASCADE, 
+        related_name="imagenes", 
+        null=False, 
+        blank=False
+    )
+    # Campo para almacenar la URL de la imagen (o la ruta al archivo subido)
+    url_imagen = models.CharField(max_length=500, null=False, blank=False)
+    
+    # Un campo opcional para indicar si esta es la imagen principal/miniatura
+    is_main = models.BooleanField(default=False)
+    
+    # Campo opcional para ordenar las imágenes
+    orden = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        # Muestra el nombre del producto al que pertenece y si es la principal
+        return f"Imagen para {self.producto.nombre} (Principal: {self.is_main})"
+
+    class Meta:
+        db_table = "imagen_producto"
+        # Esto asegura que las imágenes se recuperen por defecto en orden
+        ordering = ['orden', 'id']
