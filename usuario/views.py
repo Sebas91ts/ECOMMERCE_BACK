@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,10 +8,13 @@ from rest_framework_simplejwt.tokens import AccessToken
 from django.contrib.auth import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from django.db import transaction
+from rest_framework.decorators import api_view
 
 from .models import Usuario, Grupo
+from . import models
+from . import serializers
 from .serializers import UserSerializer, MyTokenObtainPairSerializer, UserProfileSerializer, UserUpdateSerializer
-from comercio.permissions import PuedeActualizar, PuedeEliminar, PuedeLeer, PuedeCrear
+from comercio.permissions import PuedeActualizar, PuedeEliminar, PuedeLeer, PuedeCrear,requiere_permiso
 
 # --------------------------
 # Registro de usuario
@@ -342,7 +345,359 @@ class UserDeleteView(generics.DestroyAPIView):
                 "message": f"Error al desactivar usuario: {str(e)}"
             }, status=status.HTTP_400_BAD_REQUEST)
 
+# --------------------------
+# PRIVILEGIO 
+# --------------------------
 
-# Ejemplo con function-based views
-# @api_view(['GET'])
-# @requiere_permiso("Usuario", "leer")
+@api_view(['GET'])
+# @requiere_permiso("Privilegio","leer") 
+def listar_privilegios(request):
+    privilegios = models.Privilegio.objects.all()
+    serializer = serializers.PrivilegioSerializer(privilegios, many=True)
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "LISTADO DE PRIVILEGIOS",
+        "values": {"privilegios": serializer.data}
+    })
+
+
+@api_view(['POST'])
+#@requiere_permiso("Privilegio","crear") 
+def asignar_privilegio(request):
+    grupo_id = request.data.get('grupo_id')
+    componente_id = request.data.get('componente_id')
+    permisos = {
+        "puede_leer": request.data.get("puede_leer", False),
+        "puede_crear": request.data.get("puede_crear", False),
+        "puede_actualizar": request.data.get("puede_actualizar", False),
+        "puede_eliminar": request.data.get("puede_eliminar", False),
+    }
+
+    if not grupo_id or not componente_id:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "GRUPO_ID Y COMPONENTE_ID SON REQUERIDOS",
+            "values": None
+        })
+
+    grupo = get_object_or_404(Grupo, id=grupo_id)
+    componente = get_object_or_404(models.Componente, id=componente_id)
+
+    privilegio, created = models.Privilegio.objects.update_or_create(
+        grupo=grupo,
+        componente=componente,
+        defaults=permisos
+    )
+
+    serializer = serializers.PrivilegioSerializer(privilegio)
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "PRIVILEGIO ASIGNADO EXITOSAMENTE",
+        "values": {"privilegio": serializer.data}
+    })
+
+@api_view(['PATCH'])
+@requiere_permiso("Privilegio","actualizar") 
+def editar_privilegio(request, privilegio_id):
+    privilegio = get_object_or_404(models.Privilegio, id=privilegio_id)
+    privilegio.puede_leer = request.data.get("puede_leer", privilegio.puede_leer)
+    privilegio.puede_crear = request.data.get("puede_crear", privilegio.puede_crear)
+    privilegio.puede_actualizar = request.data.get("puede_actualizar", privilegio.puede_actualizar)
+    privilegio.puede_eliminar = request.data.get("puede_eliminar", privilegio.puede_eliminar)
+    privilegio.puede_activar = request.data.get("puede_activar", privilegio.puede_activar)
+
+    privilegio.save()
+
+    serializer = serializers.PrivilegioSerializer(privilegio)
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "PRIVILEGIO ACTUALIZADO EXITOSAMENTE",
+        "values": {"privilegio": serializer.data}
+    })
+@api_view(['DELETE'])
+@requiere_permiso("Privilegio","eliminar") 
+def eliminar_privilegio(request, privilegio_id):
+    privilegio = get_object_or_404(models.Privilegio, id=privilegio_id)
+    privilegio.delete()
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "PRIVILEGIO ELIMINADO EXITOSAMENTE",
+        "values": {"privilegio_id": privilegio_id}
+    })
+
+
+# --------------------------
+# ASIGNAR GRUPO A USUARIO
+# --------------------------
+@api_view(['POST'])
+def asignar_grupo_usuario(request):
+    username = request.data.get('username')
+    grupo_id = request.data.get('grupo_id')
+
+    if not username or not grupo_id:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "USERNAME y GRUPO_ID son requeridos",
+            "values": None
+        })
+
+    try:
+        usuario = get_object_or_404(Usuario, username=username)
+        grupo = get_object_or_404(Grupo, id=grupo_id)
+    except:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "USUARIO O GRUPO NO ENCONTRADO",
+            "values": None
+        })
+
+    usuario.grupo = grupo
+    usuario.save()
+
+    serializer = serializers.UsuarioSerializer(usuario)
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": f"Grupo '{grupo.nombre}' asignado correctamente al usuario '{usuario.username}'",
+        "values": {"usuario": serializer.data}
+    })
+
+# --------------------------
+# ASIGNAR PRIVILEGIOS A GRUPO
+# --------------------------
+@api_view(['POST'])
+def asignar_privilegios_grupo(request):
+    grupo_id = request.data.get('grupo_id')
+    privilegios = request.data.get('privilegios')  # lista de dicts: [{"componente_id": 1, "puede_leer": True,...}]
+
+    if not grupo_id or not privilegios:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "GRUPO_ID y PRIVILEGIOS son requeridos",
+            "values": None
+        })
+
+    try:
+        grupo = get_object_or_404(Grupo, id=grupo_id)
+    except:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "GRUPO NO ENCONTRADO",
+            "values": None
+        })
+
+    resultados = []
+    for priv in privilegios:
+        try:
+            componente_id = priv.get('componente_id')
+            componente = get_object_or_404(models.Componente, id=componente_id)
+
+            obj, created = models.Privilegio.objects.update_or_create(
+                grupo=grupo,
+                componente=componente,
+                defaults={
+                    "puede_leer": priv.get("puede_leer", False),
+                    "puede_crear": priv.get("puede_crear", False),
+                    "puede_actualizar": priv.get("puede_actualizar", False),
+                    "puede_eliminar": priv.get("puede_eliminar", False),
+                }
+            )
+            resultados.append(serializers.PrivilegioSerializer(obj).data)
+        except:
+            continue  # ignorar componentes inválidos
+
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": f"Privilegios asignados al grupo '{grupo.nombre}'",
+        "values": {"privilegios": resultados}
+    })
+
+# --------------------------
+# GRUPO
+# --------------------------
+
+@api_view(['POST'])
+#@requiere_permiso("Grupo","crear") 
+def crear_grupo(request):
+    nombre = request.data.get('nombre')
+    descripcion = request.data.get('descripcion', '')
+
+    if not nombre:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "EL NOMBRE DEL GRUPO ES REQUERIDO",
+            "values": None
+        })
+
+    grupo, created = Grupo.objects.get_or_create(nombre=nombre, defaults={"descripcion": descripcion})
+    if not created:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "EL GRUPO YA EXISTE",
+            "values": None
+        })
+
+    serializer = serializers.GrupoSerializer(grupo)
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "GRUPO CREADO EXITOSAMENTE",
+        "values": {"grupo": serializer.data}
+    })
+
+@api_view(['PATCH'])
+@requiere_permiso("Grupo","actualizar") 
+def editar_grupo(request, grupo_id):
+    grupo = get_object_or_404(Grupo, id=grupo_id)
+    nombre = request.data.get('nombre', grupo.nombre)
+    descripcion = request.data.get('descripcion', grupo.descripcion)
+
+    grupo.nombre = nombre
+    grupo.descripcion = descripcion
+    grupo.save()
+
+    serializer = serializers.GrupoSerializer(grupo)
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "GRUPO ACTUALIZADO EXITOSAMENTE",
+        "values": {"grupo": serializer.data}
+    })
+
+@api_view(['GET'])
+# @requiere_permiso("Grupo","leer") 
+def listar_grupos(request):
+    grupos = Grupo.objects.all()
+    serializer = serializers.GrupoSerializer(grupos, many=True)
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "LISTADO DE GRUPOS",
+        "values": {"grupos": serializer.data}
+    })
+
+@api_view(['DELETE'])
+@requiere_permiso("Grupo","eliminar") 
+def eliminar_grupo(request, grupo_id):
+    grupo = get_object_or_404(Grupo, id=grupo_id)
+    grupo.is_active = False
+    grupo.save()
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "GRUPO DESACTIVADO EXITOSAMENTE",
+        "values": None
+    })
+
+@api_view(['PATCH'])
+@requiere_permiso("Grupo","activar") 
+def activar_grupo(request, grupo_id):
+    grupo = get_object_or_404(Grupo, id=grupo_id)
+    grupo.is_active = True
+    grupo.save()
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "GRUPO ACTIVADO EXITOSAMENTE",
+        "values": None
+    })
+
+# --------------------------
+# COMPONENTE
+# --------------------------
+
+@api_view(['GET'])
+#@requiere_permiso("Componente","leer") 
+def listar_componentes(request):
+    componentes = models.Componente.objects.filter(is_active=True)
+    serializer = serializers.ComponenteSerializer(componentes, many=True)
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "LISTADO DE COMPONENTES",
+        "values": {"componentes": serializer.data}
+    })
+
+
+@api_view(['POST'])
+@requiere_permiso("Componente","crear") 
+def crear_componente(request):
+    serializer = serializers.ComponenteSerializer(data=request.data)
+    if serializer.is_valid():
+        componente = serializer.save()
+        return Response({
+            "status": 1,
+            "error": 0,
+            "message": "COMPONENTE CREADO EXITOSAMENTE",
+            "values": {"componente": serializers.ComponenteSerializer(componente).data}
+        })
+    else:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "ERROR AL CREAR COMPONENTE",
+            "values": serializer.errors
+        })
+
+
+@api_view(['PATCH'])
+@requiere_permiso("Componente","actualizar") 
+def editar_componente(request, componente_id):
+    componente = get_object_or_404(models.Componente, id=componente_id)
+    serializer = serializers.ComponenteSerializer(componente, data=request.data, partial=True)
+    if serializer.is_valid():
+        componente = serializer.save()
+        return Response({
+            "status": 1,
+            "error": 0,
+            "message": "COMPONENTE ACTUALIZADO EXITOSAMENTE",
+            "values": {"componente": serializers.ComponenteSerializer(componente).data}
+        })
+    else:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "ERROR AL EDITAR COMPONENTE",
+            "values": serializer.errors
+        })
+
+
+@api_view(['DELETE'])
+@requiere_permiso("Componente","eliminar") 
+def eliminar_componente(request, componente_id):
+
+    componente = get_object_or_404(models.Componente, id=componente_id)
+    componente.is_active = False
+    componente.save()
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "COMPONENTE DESACTIVADO EXITOSAMENTE",
+        "values": None
+    })
+
+
+@api_view(['PATCH'])
+@requiere_permiso("Componente","activar") 
+def activar_componente(request, componente_id):
+    componente = get_object_or_404(models.Componente, id=componente_id)
+    componente.is_active = True
+    componente.save()
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "COMPONENTE ACTIVADO EXITOSAMENTE",
+        "values": None
+    })

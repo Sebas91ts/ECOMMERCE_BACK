@@ -1,7 +1,7 @@
 # serializers.py
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import Usuario, Grupo
+from .models import Usuario, Grupo, Privilegio, Componente
 
 # --------------------------
 # Serializer para Grupo
@@ -126,3 +126,24 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         }
         
         return data
+class ComponenteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Componente
+        fields = ['id', 'nombre']
+
+class PrivilegioSerializer(serializers.ModelSerializer):
+    grupo = GrupoSerializer(read_only=True)
+    grupo_id = serializers.PrimaryKeyRelatedField(
+        queryset=Grupo.objects.all(), source='grupo', write_only=True
+    )
+    componente = ComponenteSerializer(read_only=True)
+    componente_id = serializers.PrimaryKeyRelatedField(
+        queryset=Componente.objects.all(), source='componente', write_only=True
+    )
+
+    class Meta:
+        model = Privilegio
+        fields = [
+            'id', 'grupo', 'grupo_id', 'componente', 'componente_id',
+            'puede_leer', 'puede_crear', 'puede_activar', 'puede_actualizar', 'puede_eliminar'
+        ] 

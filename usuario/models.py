@@ -32,7 +32,10 @@ class Usuario(AbstractUser):
     is_staff = models.BooleanField(default=False)  # Para poder entrar al admin si quieres
 
     def __str__(self):
-        return self.nombre
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        else:
+            return self.username
     class Meta:
         db_table = "usuario"
 

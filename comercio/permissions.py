@@ -29,10 +29,11 @@ def requiere_permiso(componente, accion):
                 }, status=status.HTTP_403_FORBIDDEN)
         return _wrapped_view
     return decorator
-
 def has_permission(usuario, componente_nombre, accion):
     """Función auxiliar para verificar permisos"""
+    
     if not usuario.is_authenticated:
+        print("❌ ERROR: Usuario no está autenticado")
         return False
     
     # Si es superusuario o staff, tiene todos los permisos
@@ -41,6 +42,7 @@ def has_permission(usuario, componente_nombre, accion):
 
     # Si no tiene grupo, no tiene permisos
     if not usuario.grupo:
+        print("❌ ERROR: Usuario no tiene grupo asignado")
         return False
 
     try:
@@ -49,7 +51,9 @@ def has_permission(usuario, componente_nombre, accion):
             componente__nombre__iexact=componente_nombre,
             componente__is_active=True
         )
+        
     except Privilegio.DoesNotExist:
+        print(f"❌ ERROR: No existe privilegio para grupo '{usuario.grupo}' y componente '{componente_nombre}'")
         return False
     
     mapping = {
@@ -58,8 +62,9 @@ def has_permission(usuario, componente_nombre, accion):
         "actualizar": privilegio.puede_actualizar,
         "eliminar": privilegio.puede_eliminar,
     }
-    
-    return mapping.get(accion, False)
+
+    resultado = mapping.get(accion, False)
+    return resultado
 
 # Alias para mayor claridad
 requiere_lectura = lambda componente: requiere_permiso(componente, "leer")
