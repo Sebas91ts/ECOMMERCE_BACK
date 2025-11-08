@@ -39,7 +39,7 @@ class MarcaModel(models.Model):
 
 # PRODUCTOS ELECTRODOMESTICO
 class ProductoModel(models.Model):
-    categoria = models.ForeignKey(CategoriaModel, on_delete=models.CASCADE, related_name="categoria_productos", null=True, blank=True)
+    subcategoria = models.ForeignKey(SubcategoriaModel, on_delete=models.CASCADE, related_name="subcategoria_productos", null=True, blank=True)
     marca = models.ForeignKey(MarcaModel, on_delete=models.CASCADE, related_name="marca_productos", null=True, blank=True)
     nombre = models.CharField(max_length=100, blank=True, null=True)
     descripcion = models.CharField(max_length=300, blank=True, null=True)

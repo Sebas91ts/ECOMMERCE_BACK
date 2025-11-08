@@ -51,13 +51,15 @@ INSTALLED_APPS = [
 
 # Configuración de Cloudinary (Obligatorio)
 import cloudinary
-import os
+# import cloudinary.uploader
+# import cloudinary.api
+from decouple import config
 
 # Asegúrate de que estas variables de entorno existan en tu servidor/entorno local
 cloudinary.config( 
-  cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
-  api_key = os.getenv('CLOUDINARY_API_KEY'),
-  api_secret = os.getenv('CLOUDINARY_API_SECRET')
+  cloud_name = config('CLOUDINARY_CLOUD_NAME'),
+  api_key = config('CLOUDINARY_API_KEY'),
+  api_secret = config('CLOUDINARY_API_SECRET')
 )
 
 REST_FRAMEWORK = {
@@ -110,7 +112,7 @@ WSGI_APPLICATION = 'comercio.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-from decouple import config
+
 
 DATABASES = {
     'default': {

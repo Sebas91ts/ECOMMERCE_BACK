@@ -25,7 +25,7 @@ class MarcaSerializer(serializers.ModelSerializer):
 class ImagenProductoSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImagenProductoModel
-        fields = ['url_imagen', 'is_main', 'orden']
+        fields = ['id', 'url_imagen', 'is_main', 'orden']
 
 # Serializer temporal para manejar la entrada de archivos de imagen.
 class FileInputSerializer(serializers.Serializer):
@@ -39,16 +39,28 @@ class ProductoSerializer(serializers.ModelSerializer):
     imagenes = FileInputSerializer(many=True, write_only=True, required=False)
     imagenes_data = ImagenProductoSerializer(source='imagenes', many=True, read_only=True)
     
-    categoria_id = serializers.PrimaryKeyRelatedField(queryset=CategoriaModel.objects.all(), source='categoria', required=False)
+    subcategoria_id = serializers.PrimaryKeyRelatedField(
+        queryset=SubcategoriaModel.objects.all(), 
+        source='subcategoria', 
+        required=True
+    )
     marca_id = serializers.PrimaryKeyRelatedField(queryset=MarcaModel.objects.all(), source='marca', required=False)
+    subcategoria_nombre = serializers.CharField(source='subcategoria.nombre', read_only=True)
+    marca_nombre = serializers.CharField(source='marca.nombre', read_only=True)
+
+    categoria_nombre = serializers.CharField(source='subcategoria.categoria.nombre', read_only=True)
+    categoria_id = serializers.IntegerField(source='subcategoria.categoria.id', read_only=True)
 
     class Meta:
         model = ProductoModel
         fields = (
-            'id', 'categoria_id', 'marca_id', 'nombre', 'descripcion', 
+            'id', 'subcategoria_id', 'marca_id', 'nombre', 'descripcion', 
             'modelo', 'precio_contado', 'precio_cuota', 'stock', 
             'garantia_meses', 'is_active', 
-            'imagenes', 'imagenes_data' # Añadimos ambos campos
+            'imagenes', 'imagenes_data', 
+            'categoria_nombre', 'marca_nombre',
+            'subcategoria_nombre',
+            'categoria_id'
         )
     
     # --- Sobreescribir el método create para subir y guardar URLs ---
