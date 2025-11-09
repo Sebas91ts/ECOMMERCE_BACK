@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 from .serializers import CategoriaSerializer, SubcategoriaSerializer, MarcaSerializer, ProductoSerializer, ImagenProductoSerializer
 from .models import CategoriaModel, SubcategoriaModel, MarcaModel, ProductoModel
+from django.core.paginator import Paginator, EmptyPage
+from django.db.models import Q
 # Create your views here.
 
 # CRUD CATEGORIAS
@@ -613,3 +615,132 @@ def listar_productos(request):
         "message": "Todos los productos obtenidos correctamente",
         "values": {"productos": serializer.data}
     })
+# --------------------- Búsqueda de Productos con Filtros ---------------------
+@api_view(['GET'])
+def buscar_productos(request):
+    """
+    Endpoint de búsqueda con filtros para panel admin y usuarios
+    Parámetros GET:
+    - search: término de búsqueda (nombre, modelo, descripción)
+    - categoria: ID de categoría
+    - subcategoria: ID de subcategoría  
+    - marca: ID de marca
+    - min_precio: precio mínimo
+    - max_precio: precio máximo
+    - en_stock: true/false para productos con stock
+    - activos: true/false (para admin) - por defecto true para usuarios
+    - page: número de página (paginación)
+    - page_size: tamaño de página (default: 20)
+    """
+    try:
+        # Obtener parámetros de la request
+        search_term = request.GET.get('search', '').strip()
+        categoria_id = request.GET.get('categoria')
+        subcategoria_id = request.GET.get('subcategoria')
+        marca_id = request.GET.get('marca')
+        min_precio = request.GET.get('min_precio')
+        max_precio = request.GET.get('max_precio')
+        en_stock = request.GET.get('en_stock')
+        activos = request.GET.get('activos', 'true').lower() == 'true'  # Default true
+        
+        # Paginación
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        
+        # Construir queryset base
+        queryset = ProductoModel.objects.all()
+        
+        # Aplicar filtros
+        
+        # Filtro por estado activo/inactivo
+        if not request.user.is_staff:  # Para usuarios normales, solo activos
+            queryset = queryset.filter(is_active=True)
+        else:  # Para administradores, según parámetro
+            if activos is not None:
+                queryset = queryset.filter(is_active=activos)
+        
+        # Filtro de búsqueda por texto
+        if search_term:
+            queryset = queryset.filter(
+                Q(nombre__icontains=search_term) |
+                Q(modelo__icontains=search_term) |
+                Q(descripcion__icontains=search_term)
+            )
+        
+        # Filtro por categoría
+        if categoria_id:
+            queryset = queryset.filter(subcategoria__categoria_id=categoria_id)
+        
+        # Filtro por subcategoría
+        if subcategoria_id:
+            queryset = queryset.filter(subcategoria_id=subcategoria_id)
+        
+        # Filtro por marca
+        if marca_id:
+            queryset = queryset.filter(marca_id=marca_id)
+        
+        # Filtro por rango de precios
+        if min_precio:
+            queryset = queryset.filter(precio_contado__gte=min_precio)
+        if max_precio:
+            queryset = queryset.filter(precio_contado__lte=max_precio)
+        
+        # Filtro por stock
+        if en_stock and en_stock.lower() == 'true':
+            queryset = queryset.filter(stock__gt=0)
+        elif en_stock and en_stock.lower() == 'false':
+            queryset = queryset.filter(stock=0)
+        
+        # Ordenar por fecha de registro (más recientes primero)
+        queryset = queryset.order_by('-fecha_registro')
+        
+        # Aplicar paginación
+        paginator = Paginator(queryset, page_size)
+        
+        try:
+            productos_pagina = paginator.page(page)
+        except EmptyPage:
+            productos_pagina = paginator.page(paginator.num_pages)
+        
+        # Serializar los datos
+        serializer = ProductoSerializer(productos_pagina, many=True)
+        
+        # Datos de paginación para la respuesta
+        pagination_data = {
+            'count': paginator.count,
+            'total_pages': paginator.num_pages,
+            'current_page': page,
+            'page_size': page_size,
+            'has_next': productos_pagina.has_next(),
+            'has_previous': productos_pagina.has_previous(),
+            'next_page': productos_pagina.next_page_number() if productos_pagina.has_next() else None,
+            'previous_page': productos_pagina.previous_page_number() if productos_pagina.has_previous() else None,
+        }
+        
+        return Response({
+            "status": 1,
+            "error": 0,
+            "message": "Búsqueda completada correctamente",
+            "values": {
+                "productos": serializer.data,
+                "pagination": pagination_data,
+                "filters_applied": {
+                    "search": search_term,
+                    "categoria": categoria_id,
+                    "subcategoria": subcategoria_id,
+                    "marca": marca_id,
+                    "min_precio": min_precio,
+                    "max_precio": max_precio,
+                    "en_stock": en_stock,
+                    "activos": activos
+                }
+            }
+        })
+        
+    except Exception as e:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": f"Error en la búsqueda: {str(e)}",
+            "values": {}
+        }, status=400)

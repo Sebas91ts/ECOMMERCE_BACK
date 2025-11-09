@@ -35,4 +35,5 @@ urlpatterns = [
     path('listar_productos_activos', views.listar_productos_activos, name='listar_productos_activas'),
     path('listar_productos', views.listar_productos, name='listar_productos'),
     path('obtener_producto/<int:producto_id>/', views.obtener_producto_por_id, name='obtener_producto_por_id'),
+    path('buscar_productos', views.buscar_productos, name='buscar_productos'),
 ]

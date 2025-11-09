@@ -174,6 +174,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://192.168.0.19:8000",
     "https://staging.d3kmgk0vkfdvym.amplifyapp.com",
     "http://localhost:5173",
+    "http://localhost:4173",
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
