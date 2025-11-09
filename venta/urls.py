@@ -7,6 +7,7 @@ urlpatterns = [
     path('agregar_producto_carrito', views.agregar_producto_carrito, name='agregar_producto_carrito'),
     path('vaciar_carrito', views.vaciar_carrito, name='vaciar_carrito'),
     path('eliminar_producto_carrito', views.eliminar_producto_carrito, name='eliminar_producto_carrito'),
+    path('generar_pedido',views.generar_pedido, name='generar_pedido'),
 
 # CRUD FORMAS DE PAGO
     path('crear_forma_pago', views.crear_forma_pago, name='crear_forma_pago'),
