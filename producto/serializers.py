@@ -67,36 +67,37 @@ class ProductoSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         import cloudinary.uploader # Importa Cloudinary
 
-        # 1. Extraer la lista de imágenes/archivos
-        imagenes_data = validated_data.pop('imagenes')
-        
-        # 2. Crear la instancia del Producto
+       
+        # 1. Crear la instancia del Producto primero
         producto = ProductoModel.objects.create(**validated_data)
-        
-        # 3. Subir y crear cada instancia de ImagenProductoModel
-        for item in imagenes_data:
-            uploaded_file = item['file']
-            
-            # --- Lógica de Subida a Cloudinary ---
-            try:
-                # Sube el archivo a Cloudinary
-                upload_result = cloudinary.uploader.upload(uploaded_file)
-                url_final = upload_result['secure_url']
-            except Exception as e:
-                # Manejo de error de subida (crucial en producción)
-                print(f"Error subiendo a Cloudinary: {e}")
-                # Si falla la subida, puedes optar por abortar o ignorar la imagen
-                continue 
-            
-            # 4. Crear la instancia de ImagenProductoModel con la URL de Cloudinary
-            ImagenProductoModel.objects.create(
-                producto=producto, 
-                url_imagen=url_final, # Guardamos la URL de Cloudinary
-                is_main=item.get('is_main', False),
-                orden=item.get('orden', 0)
-            )
-        
+
+        # 2. Verificar si se enviaron imágenes
+        imagenes_data = validated_data.get('imagenes', None)
+        if imagenes_data:  # Si hay imágenes, procesarlas
+            # 3. Subir y crear cada instancia de ImagenProductoModel
+            for item in imagenes_data:
+                uploaded_file = item['file']
+
+                # --- Lógica de Subida a Cloudinary ---
+                try:
+                    # Sube el archivo a Cloudinary
+                    upload_result = cloudinary.uploader.upload(uploaded_file)
+                    url_final = upload_result['secure_url']
+                except Exception as e:
+                    # Manejo de error de subida (crucial en producción)
+                    print(f"Error subiendo a Cloudinary: {e}")
+                    # Si falla la subida, puedes optar por abortar o ignorar la imagen
+                    continue 
+                
+                # 4. Crear la instancia de ImagenProductoModel con la URL de Cloudinary
+                ImagenProductoModel.objects.create(
+                    producto=producto, 
+                    url_imagen=url_final, # Guardamos la URL de Cloudinary
+                    is_main=item.get('is_main', False),
+                    orden=item.get('orden', 0)
+                )     
         return producto
+    
     def update(self, instance, validated_data):
         import cloudinary.uploader
         

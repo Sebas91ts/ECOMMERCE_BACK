@@ -5,7 +5,7 @@ from django.db import models
 # CATEGORIAS DE PRODUCTO ELECTRODOMESTICO: "COCINA, REFRIGERACION, LAVADO, ETC"
 class CategoriaModel(models.Model):
     nombre = models.CharField(max_length=50)
-    descripcion = models.CharField(max_length=150, blank=True, null=True)
+    descripcion = models.CharField(max_length=300, blank=True, null=True)
     is_active = models.BooleanField(default=True)
 
     def __str__(self):

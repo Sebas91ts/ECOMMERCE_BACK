@@ -495,6 +495,63 @@ def crear_producto(request):
         "values": serializer.errors
     }, status=400)
 
+# --------------------- Crear Lista de Productos -------------------
+@swagger_auto_schema(
+    method="post",
+    request_body=ProductoSerializer,
+    responses={200: ProductoSerializer} 
+)
+@api_view(['POST'])
+@requiere_permiso("Producto", "crear")
+def crear_productos_lista(request):
+    """
+    Recibe una lista de productos en 'request.data' y crea cada producto junto con sus imágenes.
+    Espera un JSON como:
+    [
+        {
+            "nombre": "Producto 1",
+            "precio": 100,
+            "imagenes": [{"file": <archivo>, "is_main": True, "orden": 0}],
+            ...
+        },
+        {
+            "nombre": "Producto 2",
+            "precio": 200,
+            "imagenes": [...]
+        }
+    ]
+    """
+    productos_data = request.data
+    if not isinstance(productos_data, list):
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "Se esperaba una lista de productos",
+            "values": {}
+        }, status=400)
+    
+    productos_creados = []
+    errores = []
+
+    for i, producto_data in enumerate(productos_data):
+        serializer = ProductoSerializer(data=producto_data)
+        if serializer.is_valid():
+            producto = serializer.save()
+            productos_creados.append(serializer.data)
+        else:
+            errores.append({"index": i, "errors": serializer.errors})
+
+    status_code = 201 if not errores else 207  # 207 = Partial Success
+    return Response({
+        "status": 1 if not errores else 0,
+        "error": len(errores),
+        "message": "Productos procesados",
+        "values": {
+            "productos_creados": productos_creados,
+            "errores": errores
+        }
+    })
+
 # --------------------- Actualizar Producto ---------------------
 @swagger_auto_schema(
     method="patch",
