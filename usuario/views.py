@@ -249,7 +249,7 @@ class UserProfileView(APIView):
 # --------------------------
 class UserListView(generics.ListAPIView):
     permission_classes = [PuedeLeer("Usuario")]
-    serializer_class = UserProfileSerializer
+    serializer_class = UserSerializer
     
     def get_queryset(self):
         # Solo staff puede ver todos los usuarios
@@ -345,6 +345,62 @@ class UserDeleteView(generics.DestroyAPIView):
                 "error": 1,
                 "message": f"Error al desactivar usuario: {str(e)}"
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+# --------------------------
+# Actualizar perfil de usuario
+# --------------------------
+
+class EditarUsuarioView(APIView):
+    permission_classes = [PuedeActualizar("Usuario")] 
+
+    def put(self, request, id):
+        """Actualización completa del usuario"""
+        return self._actualizar_usuario(request, id, partial=False)
+    
+    def patch(self, request, id):
+        """Actualización parcial del usuario"""
+        return self._actualizar_usuario(request, id, partial=True)
+    
+    def _actualizar_usuario(self, request, id, partial=False):
+        try:
+            usuario = get_object_or_404(Usuario, id=id)
+            
+            serializer = UserUpdateSerializer(
+                usuario,
+                data=request.data,
+                partial=partial,
+                context={'request': request}
+            )
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "status": 1,
+                    "error": 0,
+                    "message": "Usuario actualizado correctamente",
+                    "values": serializer.data
+                })
+            
+            return Response({
+                "status": 2,
+                "error": 1,
+                "message": "Error en los datos",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Usuario.DoesNotExist:
+            return Response({
+                "status": 2,
+                "error": 1,
+                "message": "Usuario no encontrado"
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+        except Exception as e:
+            return Response({
+                "status": 2,
+                "error": 1,
+                "message": f"Error al actualizar el usuario: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # --------------------------
 # PRIVILEGIO 
