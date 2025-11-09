@@ -1,5 +1,7 @@
+import datetime
 from django.shortcuts import render
 from decimal import Decimal
+from dateutil.relativedelta import relativedelta
 # from utils.encrypted_logger import registrar_accion
 from comercio.permissions import requiere_permiso 
 from rest_framework.decorators import api_view
@@ -7,7 +9,7 @@ from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 # from .serializers import 
 from producto.models import ProductoModel
-from .models import CarritoModel, DetalleCarritoModel, FormaPagoModel, PedidoModel, DetallePedidoModel
+from .models import CarritoModel, DetalleCarritoModel, FormaPagoModel, PedidoModel, DetallePedidoModel, PlanPagoModel
 from .serializers import CarritoSerializer, DetalleCarritoSerializer, FormaPagoSerializer, PedidoSerializer, DetallePedidoSerializer
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Q
@@ -190,83 +192,113 @@ def eliminar_producto_carrito(request):
         }
     })
 
-
 @api_view(['POST'])
-@swagger_auto_schema(operation_description="Generar un pedido a partir del carrito del usuario")
-@requiere_permiso("Pedido", "crear")
+@swagger_auto_schema(operation_description="Generar pedido a partir del carrito del usuario")
+# @requiere_permiso("Pedido", "crear")
 def generar_pedido(request):
     usuario = request.user
+    forma_pago_id = request.data.get('forma_pago')
+    meses_credito = request.data.get('meses_credito', None)
 
-    try:
-        carrito = CarritoModel.objects.get(usuario=usuario, is_active=True)
-    except CarritoModel.DoesNotExist:
+    # 1️⃣ Verificar carrito activo
+    carrito = CarritoModel.objects.filter(usuario=usuario, is_active=True).first()
+    if not carrito or not carrito.carrito_detalles.exists():
         return Response({
             "status": 0,
             "error": 1,
-            "message": "No se encontró un carrito activo",
+            "message": "El carrito está vacío o no existe",
             "values": {}
         })
 
-    detalles_carrito = DetalleCarritoModel.objects.filter(carrito=carrito)
-    if not detalles_carrito.exists():
+    # 2️⃣ Obtener forma de pago
+    forma_pago = FormaPagoModel.objects.filter(id=forma_pago_id).first()
+    if not forma_pago:
         return Response({
             "status": 0,
             "error": 1,
-            "message": "El carrito está vacío",
+            "message": "La forma de pago especificada no existe",
             "values": {}
         })
 
-    try:
-        with transaction.atomic():
-            # 1. Crear pedido
-            pedido = PedidoModel.objects.create(
-                usuario=usuario,
-                total=carrito.total,
-                estado='pendiente'  # o como tengas definido
+    # 3️⃣ Iniciar transacción atómica
+    with transaction.atomic():
+        total_pedido = 0
+
+        # 4️⃣ Verificar stock antes de crear pedido
+        for detalle in carrito.carrito_detalles.select_related("producto"):
+            producto = detalle.producto
+            if detalle.cantidad > producto.stock:
+                return Response({
+                    "status": 0,
+                    "error": 1,
+                    "message": f"Stock insuficiente para el producto '{producto.nombre}'. Disponible: {producto.stock}, solicitado: {detalle.cantidad}",
+                    "values": {}
+                })
+
+        # 5️⃣ Crear el pedido
+        pedido = PedidoModel.objects.create(
+            usuario=usuario,
+            carrito=carrito,
+            forma_pago=forma_pago,
+            total=carrito.total
+        )
+
+        # 6️⃣ Crear detalles del pedido y actualizar stock
+        for detalle in carrito.carrito_detalles.all():
+            producto = detalle.producto
+
+            precio_unitario = producto.precio_cuota if forma_pago.nombre == "Credito" else producto.precio_contado
+            subtotal = precio_unitario * detalle.cantidad
+            total_pedido += subtotal
+
+            DetallePedidoModel.objects.create(
+                pedido=pedido,
+                producto=producto,
+                cantidad=detalle.cantidad,
+                precio_unitario=precio_unitario,
+                subtotal=subtotal
             )
 
-            # 2. Copiar detalles del carrito al pedido
-            for detalle in detalles_carrito:
-                if detalle.cantidad > detalle.producto.stock:
-                    raise Exception(f"Stock insuficiente para {detalle.producto.nombre}")
+            # Actualizar stock
+            producto.stock -= detalle.cantidad
+            producto.save()
 
-                DetallePedidoModel.objects.create(
+        # Actualizar total real del pedido
+        pedido.total = total_pedido
+        pedido.save()
+        fecha_actual = datetime.datetime.now()
+        # 7️⃣ Si es crédito, crear plan de pagos
+        if forma_pago.nombre.lower() == "credito":
+            if not meses_credito or int(meses_credito) <= 0:
+                raise ValueError("Debe especificar una cantidad válida de meses para crédito")
+            
+            monto_mensual = total_pedido / int(meses_credito)
+
+            for i in range(int(meses_credito)):
+                fecha_pago = fecha_actual + relativedelta(months=i + 1)
+                PlanPagoModel.objects.create(
                     pedido=pedido,
-                    producto=detalle.producto,
-                    cantidad=detalle.cantidad,
-                    precio_unitario=detalle.precio_unitario,
-                    subtotal=detalle.subtotal
+                    numero_cuota=i + 1,
+                    monto=monto_mensual,
+                    fecha_vencimiento=fecha_pago
                 )
+        else:
+            PlanPagoModel.objects.create(
+                    pedido=pedido,
+                    monto=total_pedido,
+                    fecha_vencimiento= fecha_actual + relativedelta(days= 1)
+                )  
+        # 8️⃣ Vaciar el carrito
+        carrito.is_active = False
+        carrito.save()
 
-                # 3. Restar stock del producto
-                detalle.producto.stock -= detalle.cantidad
-                detalle.producto.save()
-
-            # 4. Vaciar carrito
-            detalles_carrito.delete()
-            carrito.total = Decimal('0.00')
-            carrito.is_active = False
-            carrito.save()
-
-    except Exception as e:
-        return Response({
-            "status": 0,
-            "error": 1,
-            "message": f"Error al generar el pedido: {str(e)}",
-            "values": {}
-        })
-
+    # ✅ Si todo fue bien
     return Response({
         "status": 1,
         "error": 0,
-        "message": "Pedido generado con éxito",
-        "values": {
-            "pedido_id": pedido.id,
-            "total": pedido.total,
-            "cantidad_productos": detalles_carrito.count()
-        }
+        "message": "Pedido generado exitosamente",
+        "values": {"pedido_id": pedido.id}
     })
-
     
 # --------------------- Crear Categoria ---------------------
 # @swagger_auto_schema(
