@@ -306,15 +306,17 @@ def generar_pedido(request):
 def obtener_mi_carrito(request):
     usuario = request.user
 
-    # 1️⃣ Obtener carrito activo
-    carrito = CarritoModel.objects.filter(usuario=usuario, is_active=True).first()
-    if not carrito:
-        return Response({
-            "status": 0,
-            "error": 1,
-            "message": "No tienes un carrito activo",
-            "values": {}
-        })
+ # 🔹 Obtener carrito activo o crear uno nuevo si no existe
+    carrito, creado = CarritoModel.objects.get_or_create(
+        usuario=usuario,
+        is_active=True,
+        defaults={'total': 0}
+    )
+
+    if creado:
+        mensaje = "Se ha creado un nuevo carrito para el usuario"
+    else:
+        mensaje = "Carrito obtenido correctamente"
 
     # 2️⃣ Obtener detalles del carrito
     detalles = carrito.carrito_detalles.select_related('producto').all()
@@ -594,7 +596,7 @@ def activar_forma_pago(request, forma_pago_id):
 
 # --------------------- Listar Formas Pago ( ACTIVAS )---------------------
 @api_view(['GET'])
-@requiere_permiso("Forma Pago", "leer")
+# @requiere_permiso("Forma Pago", "leer")
 def listar_formas_pago_activos(request):
     formas_pago = FormaPagoModel.objects.filter(is_active=True)
     serializer = FormaPagoSerializer(formas_pago, many=True)
