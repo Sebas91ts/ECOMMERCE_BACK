@@ -134,63 +134,121 @@ def vaciar_carrito(request):
 
 @api_view(['PATCH'])
 @swagger_auto_schema(operation_description="Eliminar una cantidad de un producto del carrito")
-# @requiere_permiso("Carrito", "actualizar")
 def eliminar_producto_carrito(request):
-    usuario = request.user
-    producto_id = request.data.get('producto_id')
-    cantidad_a_eliminar = int(request.data.get('cantidad', -1))
-
-    # Obtener carrito activo
     try:
-        carrito = CarritoModel.objects.get(usuario=usuario, is_active=True)
-    except CarritoModel.DoesNotExist:
+        usuario = request.user
+        data = request.data
+        
+        print("📥 Datos recibidos RAW:", data)
+        
+        # Obtener producto_id
+        producto_id = data.get('producto_id')
+        
+        if isinstance(producto_id, dict):
+            print("⚠️  producto_id llegó como dict, extrayendo valor...")
+            producto_id = producto_id.get('producto_id') or producto_id.get('id')
+        
+        # Convertir a entero
+        try:
+            producto_id = int(producto_id)
+        except (TypeError, ValueError):
+            return Response({
+                "status": 0,
+                "error": 1,
+                "message": "producto_id debe ser un número válido",
+                "values": {}
+            }, status=400)
+        
+        # 🔥 CORRECCIÓN: Manejar correctamente la cantidad
+        cantidad_a_eliminar = data.get('cantidad', -1)
+        print(f"🔧 cantidad recibida: {cantidad_a_eliminar}, tipo: {type(cantidad_a_eliminar)}")
+        
+        # Si es -1, eliminar todo el producto
+        if cantidad_a_eliminar == -1:
+            cantidad_a_eliminar = None  # Indicar que se elimine todo
+        else:
+            try:
+                cantidad_a_eliminar = int(cantidad_a_eliminar)
+                # Asegurar que sea positivo
+                if cantidad_a_eliminar < 0:
+                    cantidad_a_eliminar = 1  # Por defecto 1 si es negativo
+            except (TypeError, ValueError):
+                cantidad_a_eliminar = 1  # Por defecto 1
+
+        # Obtener carrito activo
+        try:
+            carrito = CarritoModel.objects.get(usuario=usuario, is_active=True)
+        except CarritoModel.DoesNotExist:
+            return Response({
+                "status": 0,
+                "error": 1,
+                "message": "No se encontró un carrito activo",
+                "values": {}
+            })
+
+        # Obtener detalle del producto en el carrito
+        detalle = DetalleCarritoModel.objects.filter(carrito=carrito, producto_id=producto_id).first()
+        if not detalle:
+            return Response({
+                "status": 0,
+                "error": 1,
+                "message": "El producto no está en el carrito",
+                "values": {}
+            })
+        
+        # 🔥 CORRECCIÓN: Manejar eliminación completa vs parcial
+        if cantidad_a_eliminar is None:
+            # Eliminar todo el producto
+            cantidad_eliminada = detalle.cantidad
+            subtotal_a_restar = detalle.subtotal
+            detalle.delete()
+            cantidad_restante = 0
+            message = "Producto eliminado del carrito"
+        else:
+            # Eliminar cantidad específica
+            cantidad_eliminada = min(cantidad_a_eliminar, detalle.cantidad)
+            precio_unitario = Decimal(detalle.precio_unitario)
+            subtotal_a_restar = precio_unitario * Decimal(cantidad_eliminada)
+            
+            detalle.cantidad -= cantidad_eliminada
+            detalle.subtotal -= subtotal_a_restar
+            
+            if detalle.cantidad <= 0:
+                detalle.delete()
+                cantidad_restante = 0
+                message = "Producto eliminado del carrito"
+            else:
+                detalle.save()
+                cantidad_restante = detalle.cantidad
+                message = f"Se eliminaron {cantidad_eliminada} unidades, restan {cantidad_restante}"
+
+        print(f"🔧 Eliminando {cantidad_eliminada} unidades de {detalle.cantidad + cantidad_eliminada} totales")
+
+        # Actualizar total del carrito
+        carrito.total = max(0, carrito.total - subtotal_a_restar)
+        carrito.save()
+
+        return Response({
+            "status": 1,
+            "error": 0,
+            "message": message,
+            "values": {
+                "producto_id": producto_id,
+                "cantidad_restante": cantidad_restante,
+                "total_carrito": float(carrito.total)
+            }
+        })
+        
+    except Exception as e:
+        print("❌ Error en eliminar_producto_carrito:", str(e))
+        import traceback
+        traceback.print_exc()
         return Response({
             "status": 0,
             "error": 1,
-            "message": "No se encontró un carrito activo",
+            "message": f"Error interno del servidor: {str(e)}",
             "values": {}
-        })
-
-    # Obtener detalle del producto en el carrito
-    detalle = DetalleCarritoModel.objects.filter(carrito=carrito, producto_id=producto_id).first()
-    if not detalle:
-        return Response({
-            "status": 0,
-            "error": 1,
-            "message": "El producto no está en el carrito",
-            "values": {}
-        })
-    if cantidad_a_eliminar == -1 :
-        cantidad_a_eliminar = detalle.cantidad
-    # Calcular cuánto se va a restar del subtotal
-    precio_unitario = Decimal(detalle.precio_unitario)
-    cantidad_a_eliminar = min(cantidad_a_eliminar, detalle.cantidad)
-    subtotal_a_restar = precio_unitario * Decimal(cantidad_a_eliminar)
-
-    # Actualizar detalle
-    detalle.cantidad -= cantidad_a_eliminar
-    detalle.subtotal -= subtotal_a_restar
-    if detalle.cantidad <= 0:
-        detalle.delete()
-    else:
-        detalle.save()
-
-    # Actualizar total del carrito
-    carrito.total -= subtotal_a_restar
-    if carrito.total < 0:
-        carrito.total = 0
-    carrito.save()
-
-    return Response({
-        "status": 1,
-        "error": 0,
-        "message": "Producto actualizado/eliminado del carrito con éxito",
-        "values": {
-            "producto_id": producto_id,
-            "cantidad_restante": detalle.cantidad if detalle.id else 0,
-            "total_carrito": carrito.total
-        }
-    })
+        }, status=500)
 
 @api_view(['POST'])
 @swagger_auto_schema(operation_description="Generar pedido a partir del carrito del usuario")
