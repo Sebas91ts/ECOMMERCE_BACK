@@ -252,111 +252,217 @@ def eliminar_producto_carrito(request):
 
 @api_view(['POST'])
 @swagger_auto_schema(operation_description="Generar pedido a partir del carrito del usuario")
-# @requiere_permiso("Pedido", "crear")
 def generar_pedido(request):
     usuario = request.user
+    print("📥 Datos recibidos RAW:", request.data)
     forma_pago_id = request.data.get('forma_pago')
     meses_credito = request.data.get('meses_credito', None)
 
-    # 1️⃣ Verificar carrito activo
-    carrito = CarritoModel.objects.filter(usuario=usuario, is_active=True).first()
-    if not carrito or not carrito.carrito_detalles.exists():
-        return Response({
-            "status": 0,
-            "error": 1,
-            "message": "El carrito está vacío o no existe",
-            "values": {}
-        })
+    try:
+        # 1️⃣ Verificar carrito activo
+        carrito = CarritoModel.objects.filter(usuario=usuario, is_active=True).first()
+        if not carrito or not carrito.carrito_detalles.exists():
+            return Response({
+                "status": 0,
+                "error": 1,
+                "message": "El carrito está vacío o no existe",
+                "values": {}
+            }, status=400)
 
-    # 2️⃣ Obtener forma de pago
-    forma_pago = FormaPagoModel.objects.filter(id=forma_pago_id).first()
-    if not forma_pago:
-        return Response({
-            "status": 0,
-            "error": 1,
-            "message": "La forma de pago especificada no existe",
-            "values": {}
-        })
+        # 2️⃣ Obtener forma de pago
+        forma_pago = FormaPagoModel.objects.filter(id=forma_pago_id, is_active=True).first()
+        if not forma_pago:
+            return Response({
+                "status": 0,
+                "error": 1,
+                "message": "La forma de pago especificada no existe o no está disponible",
+                "values": {}
+            }, status=400)
 
-    # 3️⃣ Iniciar transacción atómica
-    with transaction.atomic():
-        total_pedido = 0
-
-        # 4️⃣ Verificar stock antes de crear pedido
-        for detalle in carrito.carrito_detalles.select_related("producto"):
-            producto = detalle.producto
-            if detalle.cantidad > producto.stock:
+        # 3️⃣ Validar meses de crédito si es necesario
+        if forma_pago.nombre.lower() == "credito":
+            if not meses_credito:
                 return Response({
                     "status": 0,
                     "error": 1,
-                    "message": f"Stock insuficiente para el producto '{producto.nombre}'. Disponible: {producto.stock}, solicitado: {detalle.cantidad}",
+                    "message": "Debe especificar la cantidad de meses para el crédito",
                     "values": {}
+                }, status=400)
+            try:
+                meses_credito = int(meses_credito)
+                if meses_credito not in [6, 12, 18, 24]:
+                    return Response({
+                        "status": 0,
+                        "error": 1,
+                        "message": "Los meses de crédito deben ser 6, 12, 18 o 24",
+                        "values": {}
+                    }, status=400)
+            except (ValueError, TypeError):
+                return Response({
+                    "status": 0,
+                    "error": 1,
+                    "message": "Meses de crédito debe ser un número válido",
+                    "values": {}
+                }, status=400)
+
+        # 4️⃣ Iniciar transacción atómica
+        with transaction.atomic():
+            total_pedido = 0
+            fecha_actual = datetime.datetime.now()
+
+            # 5️⃣ Verificar stock y precios antes de crear pedido
+            productos_verificados = []
+            for detalle in carrito.carrito_detalles.select_related("producto"):
+                producto = detalle.producto
+                
+                # Verificar stock
+                if detalle.cantidad > producto.stock:
+                    return Response({
+                        "status": 0,
+                        "error": 1,
+                        "message": f"Stock insuficiente para '{producto.nombre}'. Disponible: {producto.stock}, solicitado: {detalle.cantidad}",
+                        "values": {}
+                    }, status=400)
+                
+                # Verificar que el producto esté activo
+                if not producto.is_active:
+                    return Response({
+                        "status": 0,
+                        "error": 1,
+                        "message": f"El producto '{producto.nombre}' no está disponible",
+                        "values": {}
+                    }, status=400)
+
+                # Determinar precio según forma de pago
+                if forma_pago.nombre.lower() == "credito":
+                    precio_unitario = producto.precio_cuota
+                    if not precio_unitario or precio_unitario <= 0:
+                        return Response({
+                            "status": 0,
+                            "error": 1,
+                            "message": f"El producto '{producto.nombre}' no tiene precio a crédito configurado",
+                            "values": {}
+                        }, status=400)
+                else:
+                    precio_unitario = producto.precio_contado
+                    if not precio_unitario or precio_unitario <= 0:
+                        return Response({
+                            "status": 0,
+                            "error": 1,
+                            "message": f"El producto '{producto.nombre}' no tiene precio contado configurado",
+                            "values": {}
+                        }, status=400)
+
+                subtotal = precio_unitario * detalle.cantidad
+                total_pedido += subtotal
+                
+                productos_verificados.append({
+                    'producto': producto,
+                    'detalle': detalle,
+                    'precio_unitario': precio_unitario,
+                    'subtotal': subtotal
                 })
 
-        # 5️⃣ Crear el pedido
-        pedido = PedidoModel.objects.create(
-            usuario=usuario,
-            carrito=carrito,
-            forma_pago=forma_pago,
-            total=carrito.total
-        )
+            # 6️⃣ Determinar estado del pedido según forma de pago
+            if forma_pago.nombre.lower() in ["tarjeta de débito", "tarjeta de crédito"]:
+                estado_pedido = 'confirmado'  # Pagos con tarjeta se confirman inmediatamente
+            elif forma_pago.nombre.lower() == "credito":
+                estado_pedido = 'pendiente'   # Crédito requiere aprobación
+            else:
+                estado_pedido = 'pendiente'   # Otros métodos pendientes de pago
 
-        # 6️⃣ Crear detalles del pedido y actualizar stock
-        for detalle in carrito.carrito_detalles.all():
-            producto = detalle.producto
-
-            precio_unitario = producto.precio_cuota if forma_pago.nombre == "Credito" else producto.precio_contado
-            subtotal = precio_unitario * detalle.cantidad
-            total_pedido += subtotal
-
-            DetallePedidoModel.objects.create(
-                pedido=pedido,
-                producto=producto,
-                cantidad=detalle.cantidad,
-                precio_unitario=precio_unitario,
-                subtotal=subtotal
+            # 7️⃣ Crear el pedido
+            pedido = PedidoModel.objects.create(
+                usuario=usuario,
+                carrito=carrito,
+                forma_pago=forma_pago,
+                total=total_pedido,
+                estado=estado_pedido
             )
 
-            # Actualizar stock
-            producto.stock -= detalle.cantidad
-            producto.save()
+            # 8️⃣ Crear detalles del pedido y actualizar stock
+            for item in productos_verificados:
+                producto = item['producto']
+                detalle = item['detalle']
+                
+                DetallePedidoModel.objects.create(
+                    pedido=pedido,
+                    producto=producto,
+                    cantidad=detalle.cantidad,
+                    precio_unitario=item['precio_unitario'],
+                    subtotal=item['subtotal']
+                )
 
-        # Actualizar total real del pedido
-        pedido.total = total_pedido
-        pedido.save()
-        fecha_actual = datetime.datetime.now()
-        # 7️⃣ Si es crédito, crear plan de pagos
-        if forma_pago.nombre.lower() == "credito":
-            if not meses_credito or int(meses_credito) <= 0:
-                raise ValueError("Debe especificar una cantidad válida de meses para crédito")
-            
-            monto_mensual = total_pedido / int(meses_credito)
+                # Actualizar stock SOLO si el pedido está confirmado
+                if estado_pedido == 'confirmado':
+                    producto.stock -= detalle.cantidad
+                    producto.save()
 
-            for i in range(int(meses_credito)):
-                fecha_pago = fecha_actual + relativedelta(months=i + 1)
+            # 9️⃣ Crear plan de pagos según forma de pago
+            if forma_pago.nombre.lower() == "credito":
+                monto_mensual = total_pedido / meses_credito
+                
+                for i in range(meses_credito):
+                    fecha_vencimiento = fecha_actual + relativedelta(months=i + 1)
+                    PlanPagoModel.objects.create(
+                        pedido=pedido,
+                        numero_cuota=i + 1,
+                        monto=monto_mensual,
+                        fecha_vencimiento=fecha_vencimiento,
+                        estado='pendiente'
+                    )
+                
+                mensaje = f"Pedido a crédito creado exitosamente. {meses_credito} cuotas de {monto_mensual:.2f} Bs"
+                
+            elif forma_pago.nombre.lower() in ["tarjeta de débito", "tarjeta de crédito"]:
+                # Para tarjetas, crear un solo pago inmediato
                 PlanPagoModel.objects.create(
                     pedido=pedido,
-                    numero_cuota=i + 1,
-                    monto=monto_mensual,
-                    fecha_vencimiento=fecha_pago
-                )
-        else:
-            PlanPagoModel.objects.create(
-                    pedido=pedido,
+                    numero_cuota=1,
                     monto=total_pedido,
-                    fecha_vencimiento= fecha_actual + relativedelta(days= 1)
-                )  
-        # 8️⃣ Vaciar el carrito
-        carrito.is_active = False
-        carrito.save()
+                    fecha_vencimiento=fecha_actual + relativedelta(days=1),
+                    estado='pagado'  # Asumimos pago inmediato con tarjeta
+                )
+                mensaje = "Pedido con tarjeta procesado exitosamente"
+                
+            else:
+                # Para otros métodos, crear pago pendiente
+                PlanPagoModel.objects.create(
+                    pedido=pedido,
+                    numero_cuota=1,
+                    monto=total_pedido,
+                    fecha_vencimiento=fecha_actual + relativedelta(days=3),  # 3 días para pagar
+                    estado='pendiente'
+                )
+                mensaje = "Pedido creado exitosamente. Complete el pago en 3 días"
 
-    # ✅ Si todo fue bien
-    return Response({
-        "status": 1,
-        "error": 0,
-        "message": "Pedido generado exitosamente",
-        "values": {"pedido_id": pedido.id}
-    })
+            # 🔟 Desactivar carrito
+            carrito.is_active = False
+            carrito.save()
+
+        # ✅ Si todo fue bien
+        return Response({
+            "status": 1,
+            "error": 0,
+            "message": mensaje,
+            "values": {
+                "pedido_id": pedido.id,
+                "estado": estado_pedido,
+                "total": float(total_pedido),
+                "forma_pago": forma_pago.nombre
+            }
+        })
+
+    except Exception as e:
+        print(f"❌ Error en generar_pedido: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": f"Error interno del servidor: {str(e)}",
+            "values": {}
+        }, status=500)
 
 @api_view(['GET'])
 @swagger_auto_schema(operation_description="Obtener el carrito con los productos del usuario")
@@ -696,4 +802,16 @@ def obtener_forma_pago_por_id(request, forma_pago_id):
         "error": 0,
         "message": "Forma Pago obtenida correctamente",
         "values": {"Forma Pago": serializer.data}
+    })
+
+@api_view(['GET'])
+def listar_formas_pago_activas_usuario(request):
+    """Formas de pago disponibles para usuarios normales"""
+    formas_pago = FormaPagoModel.objects.filter(is_active=True)
+    serializer = FormaPagoSerializer(formas_pago, many=True)
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "Formas de pago obtenidas correctamente",
+        "values": {"formas_pago": serializer.data}
     })

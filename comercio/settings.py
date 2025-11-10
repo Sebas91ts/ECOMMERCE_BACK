@@ -29,6 +29,10 @@ ALLOWED_HOSTS = ['*', '10.0.2.2', 'localhost', '192.168.0.19']
 
 AUTH_USER_MODEL = 'usuario.Usuario'
 
+STRIPE_PUBLISHABLE_KEY = 'pk_test_...'  # Tu clave pública
+STRIPE_SECRET_KEY = 'sk_test_...'       # Tu clave secreta
+STRIPE_WEBHOOK_SECRET = 'whsec_...'     # Tu webhook secret
+
 # Application definition
 
 INSTALLED_APPS = [
