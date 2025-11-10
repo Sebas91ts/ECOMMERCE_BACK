@@ -8,15 +8,14 @@ from rest_framework_simplejwt.tokens import AccessToken
 from django.contrib.auth import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from django.db import transaction
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes 
 from drf_yasg.utils import swagger_auto_schema
-from .models import Usuario, Grupo
+from .models import Usuario, Grupo, Dispositivo
 from . import models
 from . import serializers
 from .serializers import UserSerializer, MyTokenObtainPairSerializer, UserProfileSerializer, UserUpdateSerializer, ComponenteSerializer, PrivilegioSerializer, GrupoSerializer
 from rest_framework import serializers
 from comercio.permissions import PuedeActualizar, PuedeEliminar, PuedeLeer, PuedeCrear,requiere_permiso
-
 # --------------------------
 # Registro de usuario
 # --------------------------
@@ -744,4 +743,28 @@ def activar_componente(request, componente_id):
         "error": 0,
         "message": "COMPONENTE ACTIVADO EXITOSAMENTE",
         "values": None
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def registrar_token(request):
+    usuario = request.user
+    token = request.data.get("token")
+    plataforma = request.data.get("plataforma", "android")
+
+    if not token:
+        return Response({"status": 0, "error": 1, "message": "no se pudo registrar el token"})
+
+    dispositivo, created = Dispositivo.objects.update_or_create(
+        usuario=usuario,
+        token=token,
+        defaults={"plataforma": plataforma},
+    )
+
+    return Response({
+                "status": 1,
+                "error": 0,
+                "message": "Se registró el token",
+                "values": token,
     })
