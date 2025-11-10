@@ -642,7 +642,7 @@ def listar_productos_activos(request):
     })
 # ---------------------- Listar Producto por ID ----------------------
 @api_view(['GET'])
-@requiere_permiso("Producto", "listar")
+# @requiere_permiso("Producto", "listar")
 def obtener_producto_por_id(request, producto_id):
     try:
         producto = ProductoModel.objects.get(id=producto_id, is_active=True)

@@ -99,7 +99,7 @@ def agregar_producto_carrito(request):
         "values": {"detalle": serializer.data}
     })
 
-@api_view(['PATCH'])
+@api_view(['DELETE'])
 @swagger_auto_schema(operation_description="Añadir producto al carrito de compras")
 # @requiere_permiso("Carrito", "actualizar")
 def vaciar_carrito(request):
