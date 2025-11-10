@@ -2,6 +2,7 @@
 from django.urls import path
 # from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
+from . import views_stripe
 urlpatterns = [
 # CRUD CARRITO_COMPRA
     path('agregar_producto_carrito', views.agregar_producto_carrito, name='agregar_producto_carrito'),
@@ -18,6 +19,7 @@ urlpatterns = [
     path('listar_formas_pago', views.listar_formas_pago, name='listar_formas_pago'),
     path('listar_formas_pago_activos', views.listar_formas_pago_activos, name='listar_formas_pago_activos'),
     path('obtener_forma_pago/<int:forma_pago_id>/', views.obtener_forma_pago_por_id, name='obtener_forma_pago'),
+    path('listar_formas_pago_activas_usuario', views.listar_formas_pago_activas_usuario, name='listar_formas_pago_activas_usuario'),
 
 # CRUD PEDIDOS Y CARRITO
     # PARA EL USUARIO
@@ -27,4 +29,8 @@ urlpatterns = [
     # path('listar_pedidos_por_id_usuario/<int:usuario_id>', views.listar_pedidos_por_id_usuario, name='listar_pedidos_por_id_usuario'),
     #GENERAL
     path('obtener_pedido/<int:pedido_id>/', views.obtener_pedido, name='obtener_pedido'),
+    #STRIPE
+    # path('stripe/crear-sesion', views_stripe.crear_sesion_pago_stripe, name='crear_sesion_stripe'),
+    # path('stripe/webhook', views_stripe.webhook_stripe, name='webhook_stripe'),
+    # path('stripe/verificar-pago/<str:session_id>', views_stripe.verificar_pago_stripe, name='verificar_pago_stripe'),
 ]

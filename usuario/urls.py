@@ -12,8 +12,9 @@ urlpatterns = [
     
     # Gestión de usuarios (CRUD)
     path('users/', views.UserListView.as_view(), name='user-list'),           # Listar todos
-    path('profile/update/', views.UserUpdateView.as_view(), name='user-update'), # Actualizar
+    path('profile/update/', views.UserUpdateView.as_view(), name='user-update'), # Actualizar perfil
     path('users/<int:pk>/delete/', views.UserDeleteView.as_view(), name='user-delete'), # Eliminar
+    path('users/update/<int:id>', views.EditarUsuarioView.as_view(), name='user-update'), # Actualizar
     
     # --------------------------
     # PRIVILEGIO 
