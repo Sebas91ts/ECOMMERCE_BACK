@@ -299,7 +299,170 @@ def generar_pedido(request):
         "message": "Pedido generado exitosamente",
         "values": {"pedido_id": pedido.id}
     })
-    
+
+@api_view(['GET'])
+@swagger_auto_schema(operation_description="Obtener el carrito con los productos del usuario")
+# @requiere_permiso("Pedido", "leer")
+def obtener_mi_carrito(request):
+    usuario = request.user
+
+    # 1️⃣ Obtener carrito activo
+    carrito = CarritoModel.objects.filter(usuario=usuario, is_active=True).first()
+    if not carrito:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": "No tienes un carrito activo",
+            "values": {}
+        })
+
+    # 2️⃣ Obtener detalles del carrito
+    detalles = carrito.carrito_detalles.select_related('producto').all()
+    productos = []
+    for detalle in detalles:
+        productos.append({
+            "producto_id": detalle.producto.id,
+            "nombre": detalle.producto.nombre,
+            "cantidad": detalle.cantidad,
+            "precio_unitario": detalle.precio_unitario,
+            "subtotal": detalle.subtotal,
+            "stock": detalle.producto.stock,
+        })
+
+    # 3️⃣ Devolver respuesta
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "Carrito obtenido exitosamente",
+        "values": {
+            "carrito_id": carrito.id,
+            "total": carrito.total,
+            "productos": productos
+        }
+    })
+
+@api_view(['GET'])
+@swagger_auto_schema(operation_description="Obtener los pedidos con los productos del usuario")
+# @requiere_permiso("Pedido", "leer")
+def listar_mis_pedidos(request):
+    usuario = request.user
+
+    # 1️⃣ Obtener pedidos del usuario
+    pedidos = PedidoModel.objects.filter(usuario=usuario).prefetch_related('pedido_detalles__producto').order_by('-fecha')
+
+    resultado = []
+    for pedido in pedidos:
+        detalles = []
+        for detalle in pedido.pedido_detalles.all():
+            detalles.append({
+                "producto_id": detalle.producto.id,
+                "nombre": detalle.producto.nombre,
+                "cantidad": detalle.cantidad,
+                "precio_unitario": float(detalle.precio_unitario),
+                "subtotal": float(detalle.subtotal),
+            })
+
+        resultado.append({
+            "pedido_id": pedido.id,
+            "fecha": pedido.fecha,
+            "total": float(pedido.total),
+            "estado": pedido.estado,
+            "forma_pago": pedido.forma_pago.nombre if pedido.forma_pago else None,
+            "detalles": detalles
+        })
+
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "Pedidos obtenidos exitosamente",
+        "values": resultado
+    })
+
+
+@api_view(['GET'])
+@swagger_auto_schema(operation_description="Listar todos los pedidos existentes")
+@requiere_permiso("Pedido", "leer")
+def listar_pedidos(request):
+    # 1️⃣ Obtener todos los pedidos
+    pedidos = PedidoModel.objects.prefetch_related(
+        'pedido_detalles__producto',
+        'usuario',
+        'forma_pago'
+    ).order_by('-fecha')
+
+    resultado = []
+    for pedido in pedidos:
+        detalles = []
+        for detalle in pedido.pedido_detalles.all():
+            detalles.append({
+                "producto_id": detalle.producto.id,
+                "nombre": detalle.producto.nombre,
+                "cantidad": detalle.cantidad,
+                "precio_unitario": detalle.precio_unitario,
+                "subtotal": detalle.subtotal,
+            })
+
+        resultado.append({
+            "pedido_id": pedido.id,
+            "usuario_id": pedido.usuario.id,
+            "usuario_nombre": pedido.usuario.get_full_name() or pedido.usuario.username,
+            "fecha": pedido.fecha,
+            "total": pedido.total,
+            "estado": pedido.estado,
+            "forma_pago": pedido.forma_pago.nombre if pedido.forma_pago else None,
+            "detalles": detalles
+        })
+
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "Pedidos obtenidos exitosamente",
+        "values": resultado
+    })
+
+
+@api_view(['GET'])
+@swagger_auto_schema(operation_description="Obtener un pedido mediante su ID")
+# @requiere_permiso("Pedido", "leer")
+def obtener_pedido(request, pedido_id):
+    try:
+        pedido = PedidoModel.objects.prefetch_related(
+            'pedido_detalles__producto', 'forma_pago', 'usuario'
+        ).get(id=pedido_id)
+    except PedidoModel.DoesNotExist:
+        return Response({
+            "status": 0,
+            "error": 1,
+            "message": f"No se encontró un pedido con id {pedido_id}",
+            "values": {}
+        })
+
+    # Construir lista de detalles
+    detalles = []
+    for detalle in pedido.pedido_detalles.all():
+        detalles.append({
+            "producto_id": detalle.producto.id,
+            "nombre": detalle.producto.nombre,
+            "cantidad": detalle.cantidad,
+            "precio_unitario": detalle.precio_unitario,
+            "subtotal": detalle.subtotal,
+        })
+
+    return Response({
+        "status": 1,
+        "error": 0,
+        "message": "Pedido obtenido exitosamente",
+        "values": {
+            "pedido_id": pedido.id,
+            "usuario_id": pedido.usuario.id,
+            "usuario_nombre": pedido.usuario.get_full_name() or pedido.usuario.username,
+            "fecha": pedido.fecha,
+            "total": float(pedido.total),
+            "estado": pedido.estado,
+            "forma_pago": pedido.forma_pago.nombre if pedido.forma_pago else None,
+            "detalles": detalles
+        }
+    })
 # --------------------- Crear Categoria ---------------------
 # @swagger_auto_schema(
 #     method="post",

@@ -42,4 +42,9 @@ urlpatterns = [
     path('listar_componentes', views.listar_componentes, name='listar_componentes'), 
     path('eliminar_componente/<int:componente_id>', views.eliminar_componente, name='eliminar_componente'), 
     path('activar_componente/<int:componente_id>', views.activar_componente, name='activar_componente'), 
+
+    # --------------------------
+    # RUTA PARA LAS NOTIFICACIONES PUSH EN MOVIL
+    # --------------------------
+    path("registrar-token/", views.registrar_token, name="registrar-token"),
 ]

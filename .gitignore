@@ -84,3 +84,5 @@ htmlcov/
 
 # Ignorar carpetas __pycache__ y archivos .pyc
 *.cpython-*.pyc
+
+secrets/

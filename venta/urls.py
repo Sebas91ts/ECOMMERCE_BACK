@@ -8,6 +8,7 @@ urlpatterns = [
     path('vaciar_carrito', views.vaciar_carrito, name='vaciar_carrito'),
     path('eliminar_producto_carrito', views.eliminar_producto_carrito, name='eliminar_producto_carrito'),
     path('generar_pedido',views.generar_pedido, name='generar_pedido'),
+    path('obtener_mi_carrito', views.obtener_mi_carrito, name='obtener_mi_carrito'),
 
 # CRUD FORMAS DE PAGO
     path('crear_forma_pago', views.crear_forma_pago, name='crear_forma_pago'),
@@ -18,6 +19,12 @@ urlpatterns = [
     path('listar_formas_pago_activos', views.listar_formas_pago_activos, name='listar_formas_pago_activos'),
     path('obtener_forma_pago/<int:forma_pago_id>/', views.obtener_forma_pago_por_id, name='obtener_forma_pago'),
 
-
-
+# CRUD PEDIDOS Y CARRITO
+    # PARA EL USUARIO
+    path('listar_mis_pedidos', views.listar_mis_pedidos, name='listar_mis_pedidos'),
+    # PARA ADMINISTRADOR
+    path('listar_pedidos', views.listar_pedidos, name='listar_pedidos'),
+    # path('listar_pedidos_por_id_usuario/<int:usuario_id>', views.listar_pedidos_por_id_usuario, name='listar_pedidos_por_id_usuario'),
+    #GENERAL
+    path('obtener_pedido/<int:pedido_id>/', views.obtener_pedido, name='obtener_pedido'),
 ]

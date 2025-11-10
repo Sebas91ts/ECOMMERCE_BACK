@@ -171,11 +171,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
     "http://192.168.0.19:8000",
     "https://staging.d3kmgk0vkfdvym.amplifyapp.com",
     "http://localhost:5173",
     "http://localhost:4173",
 ]
+# Permitir cookies / credenciales
+CORS_ALLOW_CREDENTIALS = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
