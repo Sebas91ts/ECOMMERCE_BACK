@@ -85,17 +85,17 @@ for i in range(NUM_PEDIDOS):
     )
     pedidos_bulk.append(pedido)
 
-    # Crear detalles para carrito y pedido
+    # Crear detalles para carrito y pedido - GUARDAR REFERENCIAS DIRECTAS
     for producto, cantidad, precio, subtotal in detalles:
         detalle_carrito_bulk.append(DetalleCarritoModel(
-            carrito=carrito,
+            carrito=carrito,  # Referencia directa al objeto carrito
             producto=producto,
             cantidad=cantidad,
             precio_unitario=precio,
             subtotal=subtotal
         ))
         detalle_pedido_bulk.append(DetallePedidoModel(
-            pedido=pedido,
+            pedido=pedido,  # Referencia directa al objeto pedido
             producto=producto,
             cantidad=cantidad,
             precio_unitario=precio,
@@ -106,23 +106,18 @@ for i in range(NUM_PEDIDOS):
 CarritoModel.objects.bulk_create(carritos_bulk)
 PedidoModel.objects.bulk_create(pedidos_bulk)
 
-# Refrescar IDs generadas
-carritos_db = list(CarritoModel.objects.filter(id__in=[c.id for c in carritos_bulk]))
-pedidos_db = list(PedidoModel.objects.filter(id__in=[p.id for p in pedidos_bulk]))
-carrito_map = {c.usuario_id: c for c in carritos_db}
-pedido_map = {p.usuario_id: p for p in pedidos_db}
+# -------- CORRECCIÓN: USAR LOS OBJETOS ORIGINALES CON IDs ACTUALIZADAS --------
+# Django actualiza los objetos en bulk_create con sus IDs generados
+# Podemos usar directamente las listas originales
 
-# Ajustar FK y guardar detalles
-for detalle in detalle_carrito_bulk:
-    detalle.carrito = carrito_map[detalle.carrito.usuario_id]
+# Insertar detalles del carrito
 DetalleCarritoModel.objects.bulk_create(detalle_carrito_bulk)
 
-for detalle in detalle_pedido_bulk:
-    detalle.pedido = pedido_map[detalle.pedido.usuario_id]
+# Insertar detalles del pedido
 DetallePedidoModel.objects.bulk_create(detalle_pedido_bulk)
 
 # -------- CREAR PLANES DE PAGO Y PAGOS --------
-for pedido in pedidos_db:
+for pedido in pedidos_bulk:  # Usar pedidos_bulk directamente
     nombre_fp = pedido.forma_pago.nombre.lower()
     if "contado" in nombre_fp:
         estado_cuota = "pagado" if pedido.estado == "pagado" else "pendiente"
