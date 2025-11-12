@@ -181,6 +181,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://192.168.0.19:8000",
     "https://staging.d3kmgk0vkfdvym.amplifyapp.com",
+    "https://frontecommerce-rosy.vercel.app",
     "http://localhost:5173",
     "http://localhost:4173",
 ]
