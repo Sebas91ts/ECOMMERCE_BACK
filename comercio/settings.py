@@ -128,9 +128,9 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD'),
         'HOST': config('DB_HOST'),
         'PORT': config('DB_PORT', cast=int),
-        # 'OPTIONS': {
-        #     'sslmode': 'require',  # Deshabilita el uso de SSL
-        # },
+        'OPTIONS': {
+            'sslmode': 'require',  # Deshabilita el uso de SSL
+        },
     }    
 } 
 

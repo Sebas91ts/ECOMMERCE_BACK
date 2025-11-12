@@ -914,7 +914,7 @@ def buscar_productos(request):
     }
 )
 @api_view(['GET'])
-@requiere_permiso("Producto", "ver")
+@requiere_permiso("Producto", "leer")
 def obtener_historial_precios(request, producto_id):
     """
     Obtiene el historial de cambios de precio de un producto para gráficas
