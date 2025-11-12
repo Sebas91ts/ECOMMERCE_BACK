@@ -12,7 +12,24 @@ class CarritoModel(models.Model):
 
     def __str__(self):
         return f"Carrito {self.id} - Creado el {self.fecha}"
+    
+    def calcular_total(self):
+        """Recalcula el total del carrito con debug"""
+        detalles = self.carrito_detalles.filter(is_active=True)
+        total = sum(detalle.subtotal for detalle in detalles)
+        self.total = total
+        self.save()
+        return total
 
+    def obtener_resumen(self):
+        """Obtiene resumen del carrito"""
+        detalles = self.carrito_detalles.filter(is_active=True)
+        return {
+            "total_productos": detalles.count(),
+            "total_items": sum(detalle.cantidad for detalle in detalles),
+            "total_precio": float(self.total)
+        }
+    
     class Meta:
         db_table = "carrito"
 
@@ -27,7 +44,10 @@ class DetalleCarritoModel(models.Model):
 
     def __str__(self):
         return f"Detalle {self.id} - Carrito {self.carrito.id} - Producto {self.producto.nombre}"
-
+    
+    def save(self, *args, **kwargs):
+        """Override save para debug"""
+        super().save(*args, **kwargs)
     class Meta:
         db_table = "detalle_carrito"
 

@@ -2,6 +2,7 @@
 from django.urls import path
 # from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
+from . import nlp_views
 urlpatterns = [
 # CRUD CATEGORIA
     path('crear_categoria', views.crear_categoria, name='crear_categoria'),
@@ -40,5 +41,6 @@ urlpatterns = [
 
 # GRAFICAS DE CAMBIO PRECIO
     path('obtener_historial_precios_producto/<int:producto_id>/', views.obtener_historial_precios, name='obtener_historial_precios_producto'),
-
+ #AGREGAR A CARRITO PLN
+    path('busqueda-natural', nlp_views.BusquedaNaturalView.as_view(), name='busqueda_natural'),
 ]
