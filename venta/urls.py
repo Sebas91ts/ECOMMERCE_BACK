@@ -30,7 +30,8 @@ urlpatterns = [
     #GENERAL
     path('obtener_pedido/<int:pedido_id>/', views.obtener_pedido, name='obtener_pedido'),
     #STRIPE
-    # path('stripe/crear-sesion', views_stripe.crear_sesion_pago_stripe, name='crear_sesion_stripe'),
-    # path('stripe/webhook', views_stripe.webhook_stripe, name='webhook_stripe'),
-    # path('stripe/verificar-pago/<str:session_id>', views_stripe.verificar_pago_stripe, name='verificar_pago_stripe'),
+    path('stripe/crear-sesion', views_stripe.crear_sesion_pago_stripe, name='crear_sesion_stripe'),
+    path('stripe/webhook', views_stripe.webhook_stripe, name='webhook_stripe'),
+    path('stripe/verificar-pago/<str:session_id>', views_stripe.verificar_pago_stripe, name='verificar_pago_stripe'),
+    path('stripe/crear-payment-intent', views_stripe.crear_payment_intent_stripe, name='crear-payment-intent'),
 ]

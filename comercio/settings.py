@@ -29,9 +29,7 @@ ALLOWED_HOSTS = ['*', '10.0.2.2', 'localhost', '192.168.0.19']
 
 AUTH_USER_MODEL = 'usuario.Usuario'
 
-STRIPE_PUBLISHABLE_KEY = 'pk_test_...'  # Tu clave pública
-STRIPE_SECRET_KEY = 'sk_test_...'       # Tu clave secreta
-STRIPE_WEBHOOK_SECRET = 'whsec_...'     # Tu webhook secret
+
 
 # Application definition
 
@@ -60,6 +58,9 @@ import cloudinary
 # import cloudinary.api
 from decouple import config
 
+STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY')
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY')
+FRONTEND_URL = config('FRONTEND_URL')
 # Asegúrate de que estas variables de entorno existan en tu servidor/entorno local
 cloudinary.config( 
   cloud_name = config('CLOUDINARY_CLOUD_NAME'),
